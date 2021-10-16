@@ -1,0 +1,93 @@
+(function() {
+  function jclass(obj) {
+    return obj["wrapped-object"];
+  }
+  function isSubclassOf(other) {
+    var tmp = jclass(this);
+    var otherid = objectid(other);
+    while (tmp != null) {
+      if (otherid == tmp.javaClassId) {
+        return true;
+      }
+      tmp = tmp.superClass;
+    }
+    return false;
+  }
+  function genid(jc) {
+    return jc.id.toString(36);
+  }
+  var refclass = heap.findClass("java.lang.ref.Reference");
+  var retcnt = 0;
+  var rcache = {};
+  var rcache2 = {};
+  var KK = function(a) {
+    this.ret = a;
+  };
+  var KK2 = function(a) {
+    this.fieldname = a;
+  };
+  var aaa = filter(heap.classes(), function(it) {
+    var hobj = heap.objects(it.name, false);
+    if (!hobj.hasMoreElements()) {
+      return false;
+    }
+    var aninstance = hobj.nextElement();
+    var fa = toArray(it.fields).filter(function(a) {
+      return unwrapJavaObject(a).type.name == "object";
+    });
+    var ret = fa.length > 0 && fa.some(function(a) {
+      var ret = false;
+      var visited = false;
+      do {
+        var ao = aninstance[a.name];
+        if (ao === null) {
+          break;
+        }
+        var jo = unwrapJavaObject(ao);
+        var jc = ao.clazz;
+        if (!jc) {
+          break;
+        }
+        var genidit=genid(it);
+        var jcid = genid(jc);
+        if (jcid in rcache) {
+          var robj = rcache[jcid];
+          ret = robj.ret;
+          visited = true;
+          break;
+        }
+        ret = isSubclassOf.call(jc, refclass);
+      } while (false);
+      if (ret){
+          if (!(genidit in rcache2))
+              rcache2[genidit] = [];
+          rcache2[genidit].push(a.name);
+      }
+      if (!visited){
+          var robj = new KK(ret);
+          rcache[jcid] = robj;
+      }
+      return ret;
+    });
+    if (ret) {
+      retcnt++;
+    }
+    return ret;
+  });
+  return map(aaa, function(it) {
+    return filter(it.instances(), function(it2) {
+      do {
+        var id = genid(it2.clazz);
+        if (!(id in rcache2)) {
+          break;
+        }
+        var fn = rcache2[id];
+        return fn.some(function(a) {
+          var fieldobj=it2[a];
+          return fieldobj && genid(fieldobj.clazz)!=id;
+        });
+      } while (false);
+      return false;
+    });
+  });
+})();
