@@ -1,93 +1,163 @@
-(function() {
-  function jclass(obj) {
-    return obj["wrapped-object"];
-  }
-  function isSubclassOf(other) {
-    var tmp = jclass(this);
-    var otherid = objectid(other);
-    while (tmp != null) {
-      if (otherid == tmp.javaClassId) {
-        return true;
-      }
-      tmp = tmp.superClass;
+//sdfdsf.js
+(function () {
+    function jclass(obj) {
+        if (obj instanceof JavaClass)
+            return obj;
+        else if (obj.constructor == Object)
+            return obj["wrapped-object"];
+        throw new Error("failed");
     }
-    return false;
-  }
-  function genid(jc) {
-    return jc.id.toString(36);
-  }
-  var refclass = heap.findClass("java.lang.ref.Reference");
-  var retcnt = 0;
-  var rcache = {};
-  var rcache2 = {};
-  var KK = function(a) {
-    this.ret = a;
-  };
-  var KK2 = function(a) {
-    this.fieldname = a;
-  };
-  var aaa = filter(heap.classes(), function(it) {
-    var hobj = heap.objects(it.name, false);
-    if (!hobj.hasMoreElements()) {
-      return false;
+    function isSubclassOf(other) {
+        var tmp = jclass(this);
+        var otherid = objectid(other);
+        while (tmp != null) {
+            if (otherid == tmp.javaClassId) {
+                return true;
+            }
+            tmp = tmp.superClass;
+        }
+        return false;
     }
-    var aninstance = hobj.nextElement();
-    var fa = toArray(it.fields).filter(function(a) {
-      return unwrapJavaObject(a).type.name == "object";
-    });
-    var ret = fa.length > 0 && fa.some(function(a) {
-      var ret = false;
-      var visited = false;
-      do {
-        var ao = aninstance[a.name];
-        if (ao === null) {
-          break;
-        }
-        var jo = unwrapJavaObject(ao);
-        var jc = ao.clazz;
-        if (!jc) {
-          break;
-        }
-        var genidit=genid(it);
-        var jcid = genid(jc);
-        if (jcid in rcache) {
-          var robj = rcache[jcid];
-          ret = robj.ret;
-          visited = true;
-          break;
-        }
-        ret = isSubclassOf.call(jc, refclass);
-      } while (false);
-      if (ret){
-          if (!(genidit in rcache2))
-              rcache2[genidit] = [];
-          rcache2[genidit].push(a.name);
-      }
-      if (!visited){
-          var robj = new KK(ret);
-          rcache[jcid] = robj;
-      }
-      return ret;
-    });
-    if (ret) {
-      retcnt++;
+    function genid(jc) {
+        return jc.id.toString(36);
     }
-    return ret;
-  });
-  return map(aaa, function(it) {
-    return filter(it.instances(), function(it2) {
-      do {
-        var id = genid(it2.clazz);
-        if (!(id in rcache2)) {
-          break;
+    function genid2(jc) {
+        return jc.javaClassId.toString(36);
+    }
+    var refclass = heap.findClass("java.lang.ref.Reference");
+    var databaseObjectclass = heap.findClass("ghidra.program.database.DatabaseObject");
+    var hn = heap.findClass("java.util.HashMap$Node");
+    var retcnt = 0;
+    var rcache = {};
+    var rcache2 = {};
+    var aaa = map(heap.classes(), function (it) {
+        if (unwrapJavaObject(it).isArray())
+            return [];
+        var hobj = heap.objects(it.name, false);
+        if (!hobj.hasMoreElements()) {
+            return [];
         }
-        var fn = rcache2[id];
-        return fn.some(function(a) {
-          var fieldobj=it2[a];
-          return fieldobj && genid(fieldobj.clazz)!=id;
+        var fa = toArray(it.fields).filter(function (a) {
+            return unwrapJavaObject(a).type.name == "object";
         });
-      } while (false);
-      return false;
+        var cmap = {};
+        var arrobj = heap.objects(it.name + '[]', false);
+        var shortcut = false;
+        if (!arrobj || !arrobj.hasMoreElements()) {
+            arrobj = [hobj.nextElement()];
+            shortcut = true;
+        }
+        else {
+            arrobj = map(arrobj, function (a) {
+                do {
+                    var arr = unwrapJavaObject(a);
+                    if (!arr) break;
+                    arr = arr.getValues();
+                    if (!arr) break;
+                    for (var i = 0; i < arr.size(); i++) {
+                        var b = arr.get(i);
+                        if (!!b)
+                            return b;
+                    }
+                }
+                while (false);
+                return undefined;
+            });
+        }
+        var contextmap = null;
+        if (shortcut)
+            contextmap = rcache;
+        else
+            contextmap = cmap;
+        var idcl = genid(it);
+        var ret = filter(arrobj, function (a) {
+            var ret = false;
+            do {
+                if (!a)
+                    break;
+                ret = fa.map(function (f) {
+                    var aa = a[f.name];
+                    var ao = unwrapJavaObject(aa);
+                    var rat = false;
+                    var ratinsof = false;
+                    var visited = false;
+                    var visited2 = false;
+                    var visited3 = false;
+                    var visited4 = false;
+                    var visited5 = false;
+                    var id = -1;
+                    var id2 = -1;
+                    do {
+                        if (!aa)
+                            break;
+                        if (!ao)
+                            break;
+                        if (!(ao instanceof Instance))
+                            break;
+                        var ac = ao.getJavaClass();
+                        if (!ac)
+                            break;
+                        id = genid2(ac);
+                        visited2 = true;
+                        visited3 = id in contextmap;
+
+                        if (shortcut && visited3) {
+                            rat = contextmap[id];
+                            visited = true;
+                            break;
+                        } else {
+                            rat = isSubclassOf.call(ac, refclass);
+                            do {
+                                if (!rat) break;
+                                if (f.name != 'value') break;
+                                var aor = aa.referent;
+                                if (!aor) break;
+                                var aor2 = unwrapJavaObject(aor);
+                                if (!(aor2 instanceof Instance))
+                                    break;
+                                var aorc = aor2.getJavaClass();
+                                id2 = genid2(aorc);
+                                visited5 = id2 in contextmap;
+                                visited4 = true;
+                            } while (false);
+                            //insof = insof && ao.referent && isSubclassOf.call(ao.referent.clazz, databaseObjectclass)
+                            break;
+                        }
+                    } while (false);
+                    if (rat && ratinsof) {
+                        if (!(idcl in rcache2))
+                            rcache2[idcl] = Set();
+                        var ridobj = rcache2[idcl];
+                        if (!ridobj.has(a.name))
+                            ridobj.add(a.name);
+                    }
+                    do {
+                        if (!visited2) break;
+                        if (visited5){
+                            rat = false;
+                            break;
+                        }
+                        else if (visited4) {
+                            contextmap[id2] = shortcut ? rat : undefined;
+                            break;
+                        }
+                        if (visited3)
+                            rat = false;
+                    }
+                    while (false);
+                    if (!visited) {
+                        var l150 = shortcut ? rat : undefined;
+                        contextmap[id] = l150;
+                    }
+                    return rat;
+                }).some(function (a) {
+                    return a;
+                });
+            }
+            while (false);
+            return ret;
+        });
+        return ret;
     });
-  });
+    return aaa;
 })();
